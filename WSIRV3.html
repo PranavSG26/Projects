@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Semantic Information Retrieval</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+    <style>
+        :root {
+            --primary: #3498db;
+            --primary-dark: #2980b9;
+            --secondary: #2c3e50;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --error: #e74c3c;
+            --success: #2ecc71;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background-color: var(--light);
+            color: var(--dark);
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: var(--secondary);
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+        
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        
+        #query {
+            flex: 1;
+            padding: 12px 15px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        #query:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+        
+        button {
+            padding: 12px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .error {
+            background-color: #fdecea;
+            color: var(--error);
+            display: block;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #7f8c8d;
+        }
+        
+        .result-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .result-section h2 {
+            color: var(--secondary);
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .answer {
+            font-size: 17px;
+            line-height: 1.7;
+            margin-bottom: 15px;
+        }
+        
+        .answer strong {
+            color: var(--secondary);
+            font-weight: 600;
+        }
+        
+        .answer em {
+            color: var(--primary);
+            font-style: italic;
+        }
+        
+        .source-list {
+            list-style: none;
+        }
+        
+        .source-item {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .source-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .relevance-badge {
+            background: #e3f2fd;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            margin-right: 10px;
+            color: var(--primary-dark);
+        }
+        
+        .source-title {
+            font-weight: 500;
+            color: var(--secondary);
+            text-decoration: none;
+        }
+        
+        .source-title:hover {
+            text-decoration: underline;
+        }
+        
+        .source-snippet {
+            color: #555;
+            font-size: 0.95em;
+        }
+        
+        .citation {
+            background: #eaf2f8;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .citation:hover {
+            background: #d4e6f1;
+        }
+        
+        .suggestions {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .suggestions h3 {
+            margin-bottom: 15px;
+            color: var(--secondary);
+        }
+        
+        .suggestion-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .suggestion-tag {
+            display: inline-block;
+            background: #e3f2fd;
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9em;
+        }
+        
+        .suggestion-tag:hover {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+        }
+        
+        @media (max-width: 600px) {
+            .search-box {
+                flex-direction: column;
+            }
+            
+            button {
+                width: 100%;
+                margin-left: 0;
+            }
+            
+            .container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Web Semantic Information Retrieval</h1>
+        
+        <div class="search-box">
+            <input type="text" id="query" placeholder="Enter your research query..." required>
+            <button id="search-btn">Retrieve Information</button>
+        </div>
+        
+        <div id="status" class="status"></div>
+        
+        <div id="results"></div>
+        
+        <div id="suggestions" class="suggestions">
+            <h3>Related Searches</h3>
+            <div id="suggestion-tags" class="suggestion-tags"></div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        const state = {
+            pyodide: null,
+            lastQuery: null,
+            searchHistory: []
+        };
+
+        // DOM Elements
+        const elements = {
+            queryInput: document.getElementById('query'),
+            searchBtn: document.getElementById('search-btn'),
+            status: document.getElementById('status'),
+            results: document.getElementById('results'),
+            suggestions: document.getElementById('suggestions'),
+            suggestionTags: document.getElementById('suggestion-tags')
+        };
+
+        // Initialize Pyodide
+        async function initializePyodide() {
+            showStatus('Initializing semantic retrieval engine...', 'loading');
+            
+            try {
+                state.pyodide = await loadPyodide({
+                    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/"
+                });
+                
+                await state.pyodide.loadPackage("micropip");
+                await state.pyodide.runPythonAsync(`
+                    import micropip
+                    await micropip.install('requests')
+                `);
+                
+                hideStatus();
+            } catch (error) {
+                showStatus(`Initialization failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Handle search
+        async function handleSearch() {
+            const query = elements.queryInput.value.trim();
+            if (!query) {
+                showStatus('Please enter a research query', 'error');
+                return;
+            }
+
+            state.lastQuery = query;
+            state.searchHistory.push(query);
+            
+            showStatus('Retrieving semantic information...', 'loading');
+            elements.results.innerHTML = '';
+            elements.suggestions.style.display = 'none';
+
+            if (!state.pyodide) {
+                await initializePyodide();
+            }
+
+            try {
+                const pythonCode = generatePythonCode(query);
+                const result = await state.pyodide.runPythonAsync(pythonCode);
+                const data = JSON.parse(result);
+                
+                displayResults(data);
+                generateSuggestions(data);
+                elements.suggestions.style.display = 'block';
+                hideStatus();
+            } catch (error) {
+                showStatus(`Retrieval failed: ${error.message}`, 'error');
+                console.error("Retrieval error:", error);
+            }
+        }
+
+        // Generate Python code for execution
+        function generatePythonCode(query) {
+            return `
+import json, re, requests
+from functools import lru_cache
+
+# Configuration
+SERPER_API_KEY = "8fa4e2d156e1822e2342a83a5455c9a44abd736d"
+GROQ_API_KEY = "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"
+MAX_RESULTS = 8
+
+@lru_cache(maxsize=50)
+def search_web(query):
+    headers = {
+        "X-API-KEY": SERPER_API_KEY,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "q": query,
+        "num": MAX_RESULTS,
+        "gl": "us",
+        "hl": "en"
+    }
+    
+    try:
+        response = requests.post(
+            "https://google.serper.dev/search",
+            headers=headers,
+            json=payload,
+            timeout=15
+        )
+        response.raise_for_status()
+        
+        return [
+            {
+                "title": result.get("title", ""),
+                "url": result.get("link", ""),
+                "snippet": result.get("snippet", ""),
+                "relevance_score": min(i+1, 5)
+            }
+            for i, result in enumerate(response.json().get("organic", []))
+        ][:MAX_RESULTS]
+    except Exception as e:
+        print(f"Search error: {str(e)}")
+        return []
+
+def analyze_content(contexts, query):
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    context_text = "\\n".join(
+        f'[[DOC:{i+1}]] {ctx["snippet"]}'
+        for i, ctx in enumerate(contexts))
+    
+    system_prompt = f"""As a semantic information retrieval system, analyze and summarize information about: {query}
+
+Context Documents:
+{context_text}
+
+Guidelines:
+1. **Provide comprehensive** semantic analysis with conceptual relationships
+2. Cite sources using [DOC:X] notation
+3. Use **bold** for key concepts and *italics* for emphasis
+4. Maintain academic rigor and clarity in information retrieval"""
+    
+    payload = {
+        "model": "llama3-70b-8192",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ],
+        "temperature": 0.3,
+        "max_tokens": 1500,
+        "top_p": 0.9
+    }
+    
+    try:
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        print(f"Analysis error: {str(e)}")
+        return ""
+
+def process_query(query):
+    contexts = search_web(query)
+    if not contexts:
+        return {"error": "No relevant documents found"}
+    
+    analysis = analyze_content(contexts, query)
+    citations = list(set(re.findall(r'\\[DOC:(\\d+)\\]', analysis)))
+    
+    return {
+        "query": query,
+        "analysis": analysis,
+        "contexts": contexts,
+        "citations": citations,
+        "keywords": list(set(
+            word.lower() 
+            for word in re.findall(r'\\b\\w{4,}\\b', query + " " + " ".join(c["snippet"] for c in contexts))
+            if not word.isdigit()
+        ))
+    }
+
+result = process_query("""${escapeString(query)}""")
+json.dumps(result)
+            `;
+        }
+
+        // Display results
+        function displayResults(data) {
+            if (data.error) {
+                elements.results.innerHTML = `
+                    <div class="result-section error">
+                        <h2>Retrieval Error</h2>
+                        <p>${escapeHtml(data.error)}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let resultsHTML = `
+                <div class="result-section">
+                    <h2>Semantic Analysis: "${escapeHtml(data.query)}"</h2>
+                    <div class="answer">${formatAnalysisText(data.analysis)}</div>
+                </div>
+                
+                <div class="result-section">
+                    <h2>Retrieved Sources (${data.contexts.length})</h2>
+                    <ul class="source-list">
+                        ${data.contexts.map((source, index) => `
+                            <li class="source-item" id="doc-${index+1}">
+                                <div class="source-header">
+                                    <span class="relevance-badge">Relevance: ${source.relevance_score}/5</span>
+                                    <a href="${escapeHtml(source.url)}" class="source-title" target="_blank">${escapeHtml(source.title)}</a>
+                                </div>
+                                <p class="source-snippet">${escapeHtml(source.snippet)}</p>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+
+            if (data.citations.length > 0) {
+                resultsHTML += `
+                    <div class="result-section">
+                        <h2>Key References</h2>
+                        <ul class="source-list">
+                            ${data.citations.map(num => `
+                                <li class="source-item">
+                                    <span class="citation" onclick="scrollToCitation(${num})">[DOC:${num}]</span> → 
+                                    <a href="${escapeHtml(data.contexts[num-1].url)}" target="_blank">
+                                        ${escapeHtml(data.contexts[num-1].title)}
+                                    </a>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            elements.results.innerHTML = resultsHTML;
+        }
+
+        // Generate related search suggestions
+        function generateSuggestions(data) {
+            if (!data.keywords || data.keywords.length === 0) return;
+            
+            elements.suggestionTags.innerHTML = '';
+            
+            // Create 4-6 suggestions by combining keywords
+            const suggestions = new Set();
+            const keywords = [...data.keywords];
+            
+            // Add original query words
+            data.query.split(/\s+/).forEach(word => {
+                if (word.length > 3) keywords.push(word.toLowerCase());
+            });
+            
+            // Generate combinations
+            while (suggestions.size < 6 && keywords.length > 1) {
+                const combo = [];
+                const count = Math.random() > 0.5 ? 2 : 3;
+                
+                for (let i = 0; i < count && keywords.length > 0; i++) {
+                    const randomIndex = Math.floor(Math.random() * keywords.length);
+                    combo.push(keywords[randomIndex]);
+                    keywords.splice(randomIndex, 1);
+                }
+                
+                if (combo.length > 1) {
+                    suggestions.add(combo.join(' '));
+                }
+            }
+            
+            // Add to DOM
+            suggestions.forEach(suggestion => {
+                const tag = document.createElement('div');
+                tag.className = 'suggestion-tag';
+                tag.textContent = suggestion;
+                tag.onclick = () => {
+                    elements.queryInput.value = suggestion;
+                    handleSearch();
+                };
+                elements.suggestionTags.appendChild(tag);
+            });
+        }
+
+        // Helper functions
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function escapeString(text) {
+            return text.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+        }
+
+        function formatAnalysisText(text) {
+            if (!text) return '';
+            return escapeHtml(text)
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/\[DOC:(\d+)\]/g, '<sup><span class="citation" onclick="scrollToCitation($1)">[$1]</span></sup>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function scrollToCitation(num) {
+            const element = document.getElementById(`doc-${num}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                element.style.animation = 'highlight 1.5s';
+                setTimeout(() => element.style.animation = '', 1500);
+            }
+        }
+
+        function showStatus(message, type = 'loading') {
+            elements.status.textContent = message;
+            elements.status.className = `status ${type}`;
+            elements.status.style.display = 'block';
+        }
+
+        function hideStatus() {
+            elements.status.style.display = 'none';
+        }
+
+        // Event listeners
+        elements.searchBtn.addEventListener('click', handleSearch);
+        elements.queryInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSearch();
+        });
+
+        // Initialize
+        window.addEventListener('load', initializePyodide);
+        
+        // Add highlight animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes highlight {
+                0% { background-color: rgba(52, 152, 219, 0.1); }
+                100% { background-color: transparent; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
